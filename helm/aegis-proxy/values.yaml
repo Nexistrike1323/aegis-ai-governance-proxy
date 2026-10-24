@@ -1,0 +1,34 @@
+replicaCount: 2
+
+image:
+  repository: aegis-ai/governance-proxy
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+service:
+  type: ClusterIP
+  port: 4000
+
+opa:
+  image: openpolicyagent/opa:latest
+  port: 8181
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  host: governance.aegis.internal
+  tls:
+    - secretName: aegis-proxy-tls
+      hosts:
+        - governance.aegis.internal
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

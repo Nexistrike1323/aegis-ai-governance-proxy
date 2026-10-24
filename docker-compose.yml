@@ -1,0 +1,13 @@
+services:
+  opa-sidecar:
+    image: openpolicyagent/opa:latest
+    container_name: aegis-opa-sidecar
+    ports:
+      - "8181:8181"
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "/policies/ai_governance.rego"
+    volumes:
+      - ./policies:/policies:ro

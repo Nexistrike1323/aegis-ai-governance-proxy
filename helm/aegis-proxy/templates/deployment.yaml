@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aegis-proxy.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "aegis-proxy.name" . }}
+    helm.sh/chart: {{ include "aegis-proxy.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "aegis-proxy.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "aegis-proxy.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: proxy
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 4000
+              name: http
+          env:
+            - name: OPA_URL
+              value: "http://127.0.0.1:8181/v1/data/aegis/governance"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        - name: opa-sidecar
+          image: "{{ .Values.opa.image }}"
+          imagePullPolicy: IfNotPresent
+          args:
+            - "run"
+            - "--server"
+            - "--addr=0.0.0.0:8181"
+            - "/policies/ai_governance.rego"
+          ports:
+            - containerPort: 8181
+              name: opa
+          volumeMounts:
+            - name: policy-volume
+              mountPath: /policies
+              readOnly: true
+      volumes:
+        - name: policy-volume
+          configMap:
+            name: {{ include "aegis-proxy.fullname" . }}-policies

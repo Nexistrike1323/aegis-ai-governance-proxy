@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aegis-proxy.fullname" . }}-policies
+data:
+  ai_governance.rego: |
+    package aegis.governance
+    default allow := false
+    default action := "BLOCK"
+    default reason := "Denied by default zero-trust policy"
+
+    action := "BLOCK" if {
+        "SECRET_API_KEY" in input.findings_categories
+    }
+    reason := "Prompt contains high-entropy API credential (SECRET_API_KEY)" if {
+        "SECRET_API_KEY" in input.findings_categories
+    }
+
+    action := "BLOCK" if {
+        input.identity.role == "intern"
+        input.model == "gpt-4o"
+    }
+
+    action := "BLOCK" if {
+        input.identity.role == "intern"
+        count(input.findings_categories) > 0
+    }
+
+    allow := true if {
+        input.identity.role == "doctor"
+        not "SECRET_API_KEY" in input.findings_categories
+        count(input.findings_categories) > 0
+    }
+    action := "REDACT_AND_ALLOW" if {
+        input.identity.role == "doctor"
+        not "SECRET_API_KEY" in input.findings_categories
+        count(input.findings_categories) > 0
+    }
+
+    allow := true if {
+        count(input.findings_categories) == 0
+        not (input.identity.role == "intern" && input.model == "gpt-4o")
+    }
+    action := "ALLOW" if {
+        count(input.findings_categories) == 0
+        not (input.identity.role == "intern" && input.model == "gpt-4o")
+    }
