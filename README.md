@@ -30,38 +30,40 @@ Aegis was built to solve these enterprise challenges at the network proxy layerâ
 
 
 
-## Detailed Technical Implementation
+# Aegis Architecture: Codebase File Mapping (Modules 1 - 5)
 
-### 1. Deterministic O(N) Multi-Pattern Trie Scanner
-Rather than using slow regular expression loops or expensive API calls to check for thousands of sensitive keywords, Aegis implements an **Aho-Corasick Automaton** (a Trie data structure with precomputed BFS failure links) in TypeScript.
-- **Performance:** Scans raw prompt text against large enterprise deny-lists in a single $O(N)$ pass.
-- **Latency:** Execution time remains flat between $0.02\text{ ms}$ and $0.3\text{ ms}$, ensuring zero noticeable impact on application throughput.
+## Module 1: Deterministic O(N) Multi-Pattern Trie Scanner
+- **Core Implementation File:** `src/scanner/ahoCorasick.ts`
+- **Streaming Redaction Transform File:** `src/proxy/sseTransform.ts`
+- **What it does:** Implements the Aho-Corasick automaton for single-pass multi-pattern matching and the sliding-window lookahead buffer that inspects Server-Sent Events (SSE) mid-stream without breaking Time-To-First-Token.
 
-### 2. Real-Time Streaming SSE Lookahead Redactor
-When applications stream LLM responses using Server-Sent Events (SSE), standard redactors fail because sensitive patterns (such as segmented identification numbers or long keys) often get split across multiple data chunks.
-- **Mechanism:** Aegis uses a sliding-window lookahead buffer (`SSERedactionTransform`) that retains a small tail retention window. It inspects tokens mid-stream, redacts matched patterns on the fly, and flushes safe tokens downstream without breaking Time-To-First-Token (TTFT).
+## Module 2: Zero-Trust OPA Policy Engine & JWT Verification
+- **Core Implementation File:** `src/policy/opaClient.ts`
+- **Policy Definition File:** `policies/ai_governance.rego`
+- **What it does:** Decodes and verifies cryptographic JSON Web Tokens (`jose`) and queries the embedded Open Policy Agent (OPA) / Rego policy engine to enforce role-based access control and prevent cross-tenant IDOR attacks.
 
-### 3. Zero-Trust OPA Policy Engine & JWT Verification
-Every incoming request must present a valid cryptographic JSON Web Token (`jose`).
-- **Authorization:** The proxy extracts tenant identifiers and user roles (`doctor`, `intern`, `admin`) and queries an integrated **Open Policy Agent (OPA)** policy evaluation engine running Rego logic.
-- **Mitigation:** Instantly blocks cross-tenant IDOR (Insecure Direct Object Reference) spoofing attempts, unauthorized model tiers, and prompt injection attempts before they ever hit the upstream LLM provider.
+## Module 3: Tamper-Evident SHA-256 Audit Pipeline
+- **Core Implementation File:** `src/audit/hashChainAudit.ts`
+- **What it does:** Appends every allowed, redacted, or blocked request into an immutable SHA-256 cryptographic hash-chain (`prevHash + payload + timestamp + salt`) and exposes mathematical chain verification.
 
-### 4. Tamper-Evident SHA-256 Audit Pipeline
-Regulatory compliance demands proof that audit logs have not been modified or deleted.
-- **Mechanism:** Every allowed, redacted, or blocked request appends an immutable record to a **SHA-256 Cryptographic Hash-Chain** (`prevHash + payload + timestamp + salt`).
-- **Verification:** An administrative endpoint (`/v1/audit/verify`) mathematically recalculates and verifies the integrity of the entire ledger. Any unauthorized data tampering instantly invalidates the chain.
+## Module 4: Live Control Plane Dashboard UI
+- **Core Implementation File:** `src/ui/dashboard.ts`
+- **Main Server Binding:** `src/server.ts`
+- **What it does:** Serves a dark-mode engineering control plane at `http://127.0.0.1:4000/dashboard` featuring live $p50, p95, p99$ latency metrics, threat counters, chain integrity badges, and an immutable audit stream table.
 
-### 5. Production Kubernetes Helm Packaging
-Designed for cloud-native deployment, Aegis is packaged as a complete **Kubernetes Helm Chart** (`helm/aegis-proxy`).
-- **Multi-Container Pods:** Deploys the Node.js governance proxy alongside an official OPA sidecar container (`openpolicyagent/opa`) sharing a local loopback network and a mounted ConfigMap containing governance Rego policies.
-- **Ingress & TLS:** Configured with production-ready NGINX Ingress rules, TLS termination secrets, and Cert-Manager annotations.
+## Module 5: Production Kubernetes Helm Packaging
+- **Helm Chart Directory:** `helm/aegis-proxy/`
+  - `Chart.yaml` (Metadata)
+  - `values.yaml` (Default configuration values)
+  - `templates/deployment.yaml` (Multi-container pod: Node.js proxy + OPA sidecar)
+  - `templates/service.yaml` (ClusterIP service)
+  - `templates/ingress.yaml` (NGINX Ingress with TLS & cert-manager annotations)
+  - `templates/configmap.yaml` (Dynamically injects Rego governance policies)
+- **What it does:** Packages the entire platform into a production-ready Kubernetes Helm chart for cluster-native deployment.
 
----
+Verification & Usage Guide
 
-## Verification & Usage
-
-### Running the Automated Test Suite
-The verification suite executes comprehensive integration tests covering doctor PII redaction, intern model restrictions, API key exfiltration attempts, cross-tenant IDOR attacks, and SSE stream split-token redaction:
-```powershell
 npm run verify
 
+
+npm run dev
